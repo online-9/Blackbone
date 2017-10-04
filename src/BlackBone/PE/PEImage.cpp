@@ -22,6 +22,7 @@ PEImage::PEImage( void )
 
 PEImage::~PEImage( void )
 {
+    Release();
 }
 
 /// <summary>
@@ -42,12 +43,11 @@ NTSTATUS PEImage::Load( const std::wstring& path, bool skipActx /*= false*/ )
         NULL, OPEN_EXISTING, 0, NULL
         );
 
-    if (_hFile != INVALID_HANDLE_VALUE)
+    if (_hFile)
     {
         // Try mapping as image
         _hMapping = CreateFileMappingW( _hFile, NULL, SEC_IMAGE | PAGE_READONLY, 0, 0, NULL );
-
-        if (_hMapping && _hMapping != INVALID_HANDLE_VALUE)
+        if (_hMapping)
         {
             _isPlainData = false;
             _pFileBase = MapViewOfFile( _hMapping, FILE_MAP_READ, 0, 0, 0 );
@@ -58,7 +58,7 @@ NTSTATUS PEImage::Load( const std::wstring& path, bool skipActx /*= false*/ )
             _isPlainData = true;
             _hMapping = CreateFileMappingW( _hFile, NULL, PAGE_READONLY, 0, 0, NULL );
 
-            if (_hMapping && _hMapping != INVALID_HANDLE_VALUE)
+            if (_hMapping)
                 _pFileBase = MapViewOfFile( _hMapping, FILE_MAP_READ, 0, 0, 0 );
         }
 
@@ -113,29 +113,15 @@ NTSTATUS PEImage::Reload()
 /// <param name="temporary">Preserve file paths for file reopening</param>
 void PEImage::Release( bool temporary /*= false*/ )
 {
-    if (_hctx != INVALID_HANDLE_VALUE)
+    if (_pFileBase)
     {
-        ReleaseActCtx( _hctx );
-        _hctx = INVALID_HANDLE_VALUE;
+        UnmapViewOfFile( _pFileBase );
+        _pFileBase = nullptr;
     }
 
-    if (_hMapping && _hMapping != INVALID_HANDLE_VALUE)
-    {
-        if (_pFileBase)
-        {
-            UnmapViewOfFile( _pFileBase );
-            _pFileBase = nullptr;
-        }
-
-        CloseHandle( _hMapping );
-        _hMapping = NULL;
-    }
-
-    if (_hFile != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle( _hFile );
-        _hFile = INVALID_HANDLE_VALUE;
-    }
+    _hMapping.reset();
+    _hFile.reset();
+    _hctx.reset();
 
     // Reset pointers to data
     _pImageHdr32 = nullptr;
@@ -184,30 +170,28 @@ NTSTATUS PEImage::Parse( void* pImageBase /*= nullptr*/ )
     if (_pImageHdr32->Signature != IMAGE_NT_SIGNATURE)
         return STATUS_INVALID_IMAGE_FORMAT;
 
+    auto GetHeaderData = [this, &pSection]( auto pImageHeader )
+    {
+        _imgBase = pImageHeader->OptionalHeader.ImageBase;
+        _imgSize = pImageHeader->OptionalHeader.SizeOfImage;
+        _hdrSize = pImageHeader->OptionalHeader.SizeOfHeaders;
+        _epRVA = pImageHeader->OptionalHeader.AddressOfEntryPoint;
+        _subsystem = pImageHeader->OptionalHeader.Subsystem;
+        _DllCharacteristics = pImageHeader->OptionalHeader.DllCharacteristics;
+
+        pSection = reinterpret_cast<const IMAGE_SECTION_HEADER*>(pImageHeader + 1);
+    };
+
     // Detect x64 image
     if (_pImageHdr32->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
     {
         _is64 = true;
-
-        _imgBase = _pImageHdr64->OptionalHeader.ImageBase;
-        _imgSize = _pImageHdr64->OptionalHeader.SizeOfImage;
-        _hdrSize = _pImageHdr64->OptionalHeader.SizeOfHeaders;
-        _epRVA   = _pImageHdr64->OptionalHeader.AddressOfEntryPoint;
-        _subsystem = _pImageHdr64->OptionalHeader.Subsystem;
-
-        pSection = reinterpret_cast<const IMAGE_SECTION_HEADER*>(_pImageHdr64 + 1);
+        GetHeaderData( _pImageHdr64 );
     }
     else
     {
         _is64 = false;
-
-        _imgBase = _pImageHdr32->OptionalHeader.ImageBase;
-        _imgSize = _pImageHdr32->OptionalHeader.SizeOfImage;
-        _hdrSize = _pImageHdr32->OptionalHeader.SizeOfHeaders;
-        _epRVA   = _pImageHdr32->OptionalHeader.AddressOfEntryPoint;
-        _subsystem = _pImageHdr32->OptionalHeader.Subsystem;
-
-        pSection = reinterpret_cast<const IMAGE_SECTION_HEADER*>(_pImageHdr32 + 1);
+        GetHeaderData( _pImageHdr32 );
     }
 
     // Exe file
@@ -233,7 +217,7 @@ NTSTATUS PEImage::Parse( void* pImageBase /*= nullptr*/ )
 
     // Sections
     for (int i = 0; i < _pImageHdr32->FileHeader.NumberOfSections; ++i, ++pSection)
-        _sections.push_back( *pSection );
+        _sections.emplace_back( *pSection );
 
     return STATUS_SUCCESS;
 }
@@ -513,12 +497,12 @@ NTSTATUS PEImage::PrepareACTX( const wchar_t* filepath /*= nullptr*/ )
         if (GetTempFileNameW( tempDir, L"ImageManifest", 0, tempPath ) == 0)
             return STATUS_UNSUCCESSFUL;
      
-        HANDLE hTmpFile = CreateFileW( tempPath, FILE_GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, 0, NULL );
+        auto hTmpFile = FileHandle( CreateFileW( tempPath, FILE_GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, 0, NULL ) );
         if (hTmpFile != INVALID_HANDLE_VALUE)
         {
             DWORD bytes = 0;
             WriteFile( hTmpFile, pManifest, manifestSize, &bytes, NULL );
-            CloseHandle( hTmpFile );
+            hTmpFile.reset();
 
             act.lpSource = tempPath;
             _manifestPath = tempPath;

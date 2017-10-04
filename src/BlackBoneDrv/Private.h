@@ -158,6 +158,7 @@ typedef struct _DYNAMIC_DATA
 
     ULONG KExecOpt;         // KPROCESS::ExecuteOptions 
     ULONG Protection;       // EPROCESS::Protection
+    ULONG EProcessFlags2;   // EPROCESS::Flags2
     ULONG ObjTable;         // EPROCESS::ObjectTable
     ULONG VadRoot;          // EPROCESS::VadRoot
     ULONG NtProtectIndex;   // NtProtectVirtualMemory SSDT index
@@ -218,8 +219,8 @@ NTSTATUS
 NTAPI
 ZwProtectVirtualMemory(
     IN HANDLE ProcessHandle,
-    IN PVOID* BaseAddress,
-    IN SIZE_T* NumberOfBytesToProtect,
+    IN OUT PVOID* BaseAddress,
+    IN OUT SIZE_T* NumberOfBytesToProtect,
     IN ULONG NewAccessProtection,
     OUT PULONG OldAccessProtection 
     );
@@ -231,8 +232,8 @@ NTSTATUS
 NTAPI
 ZwProtectVirtualMemory( 
     IN HANDLE ProcessHandle,
-    IN PVOID* BaseAddress,
-    IN SIZE_T* NumberOfBytesToProtect,
+    IN OUT PVOID* BaseAddress,
+    IN OUT SIZE_T* NumberOfBytesToProtect,
     IN ULONG NewAccessProtection,
     OUT PULONG OldAccessProtection
     );

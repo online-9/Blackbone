@@ -52,6 +52,38 @@ typedef union _KEXECUTE_OPTIONS
     UCHAR ExecuteOptions;
 } KEXECUTE_OPTIONS, *PKEXECUTE_OPTIONS;
 
+typedef struct _EPROCESS_FLAGS2
+{
+    unsigned int JobNotReallyActive : 1;
+    unsigned int AccountingFolded : 1;
+    unsigned int NewProcessReported : 1;
+    unsigned int ExitProcessReported : 1;
+    unsigned int ReportCommitChanges : 1;
+    unsigned int LastReportMemory : 1;
+    unsigned int ForceWakeCharge : 1;
+    unsigned int CrossSessionCreate : 1;
+    unsigned int NeedsHandleRundown : 1;
+    unsigned int RefTraceEnabled : 1;
+    unsigned int DisableDynamicCode : 1;
+    unsigned int EmptyJobEvaluated : 1;
+    unsigned int DefaultPagePriority : 3;
+    unsigned int PrimaryTokenFrozen : 1;
+    unsigned int ProcessVerifierTarget : 1;
+    unsigned int StackRandomizationDisabled : 1;
+    unsigned int AffinityPermanent : 1;
+    unsigned int AffinityUpdateEnable : 1;
+    unsigned int PropagateNode : 1;
+    unsigned int ExplicitAffinity : 1;
+    unsigned int ProcessExecutionState : 2;
+    unsigned int DisallowStrippedImages : 1;
+    unsigned int HighEntropyASLREnabled : 1;
+    unsigned int ExtensionPointDisable : 1;
+    unsigned int ForceRelocateImages : 1;
+    unsigned int ProcessStateChangeRequest : 2;
+    unsigned int ProcessStateChangeInProgress : 1;
+    unsigned int DisallowWin32kSystemCalls : 1;
+} EPROCESS_FLAGS2, *PEPROCESS_FLAGS2;
+
 typedef union _EXHANDLE
 {
     struct
@@ -314,7 +346,7 @@ typedef struct _RTL_PROCESS_MODULE_INFORMATION
     USHORT InitOrderIndex;
     USHORT LoadCount;
     USHORT OffsetToFileName;
-    UCHAR  FullPathName[256];
+    UCHAR  FullPathName[MAXIMUM_FILENAME_LENGTH];
 } RTL_PROCESS_MODULE_INFORMATION, *PRTL_PROCESS_MODULE_INFORMATION;
 
 typedef struct _RTL_PROCESS_MODULES
@@ -398,7 +430,7 @@ typedef struct _PEB
     PVOID AtlThunkSListPtr;
     PVOID IFEOKey;
     PVOID CrossProcessFlags;
-    PVOID UserSharedInfoPtr;
+    PVOID KernelCallbackTable;
     ULONG SystemReserved;
     ULONG AtlThunkSListPtr32;
     PVOID ApiSetMap;
